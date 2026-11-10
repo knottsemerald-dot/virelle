@@ -539,15 +539,28 @@ export default function App() {
   // The same call reports who owns the house, so views that show the owner's
   // name next to ours read it from the server instead of carrying one inside.
   const [ownerName, setOwnerName] = useState('You');
+  const companionsRefreshVersion = useRef(0);
+  async function refreshCompanions() {
+    const version = ++companionsRefreshVersion.current;
+    try {
+      const res = await apiFetch('/api/companions');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (version !== companionsRefreshVersion.current) return;
+      if (data?.companions) {
+        const rows = data.companions.map(toDbCompanion) as DBCompanion[];
+        setDbCompanions(rows);
+        setThreadCompanions(prev => prev.flatMap(c => {
+          const updated = rows.find(row => row.id === c.id);
+          return updated ? [updated] : [];
+        }));
+      }
+      const owner = ownerFromCompanionsPayload(data) ?? await fetchOwnerFromPreferences();
+      if (version === companionsRefreshVersion.current && owner?.name) setOwnerName(owner.name);
+    } catch { /* keep the last successfully loaded registry */ }
+  }
   useEffect(() => {
-    apiFetch('/api/companions')
-      .then(res => res.ok ? res.json() : null)
-      .then(async data => {
-        if (data?.companions) setDbCompanions(data.companions.map(toDbCompanion));
-        const owner = ownerFromCompanionsPayload(data) ?? await fetchOwnerFromPreferences();
-        if (owner?.name) setOwnerName(owner.name);
-      })
-      .catch(() => {});
+    void refreshCompanions();
     // Re-read once main's profiles land so the rows pick up the live photos.
   }, [ksProfiles]);
 
@@ -1955,6 +1968,7 @@ export default function App() {
         {osState === 'companions' && (
           <CompanionsApp
             key="companions"
+            onCompanionsChange={refreshCompanions}
             onClose={closeApp}
             themeConfig={activeTheme}
             themeMode={theme.mode}

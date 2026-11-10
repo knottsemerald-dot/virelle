@@ -11,7 +11,6 @@
   const SPEAKERS: { key: string; label: string }[] = [
     { key: 'companion-a', label: 'Companion A' },
     { key: 'companion-b', label: 'Companion B' },
-    { key: 'companion-c', label: 'Companion C' },
     { key: 'user', label: 'You (the operator)' },
     { key: 'fallback', label: 'Narration (✨)' },
   ];

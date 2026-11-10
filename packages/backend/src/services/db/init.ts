@@ -140,37 +140,25 @@ export function initDb(dbPath: string): Database.Database {
 
   // Companions + per-thread roster (Arc C rooms, Slice 1 — schema only).
   // Schema shape ported from NESTstack rooms-worker (cindiekinzz-coder, MIT);
-  // see migrations/014 for the full attribution + id convention. The .sql
-  // mixes idempotent CREATE TABLE IF NOT EXISTS with two bare ALTER TABLE ADD
-  // COLUMN (threads.default_companion_id, messages.companion_id). SQLite lacks
-  // `ADD COLUMN IF NOT EXISTS`, so on a re-boot the whole-file exec throws
-  // "duplicate column" and stops before the seed. Catch + heal column-by-column
-  // and re-run the idempotent tail, mirroring the 010/012 multi-statement
-  // pattern.
+  // see migrations/014 for the full attribution + id convention.
+  // Heal duplicate columns and idempotently restore only the core residents.
   const companionsMigrationSQL = migrationSql('migrations/014_companions.sql');
   if (companionsMigrationSQL !== null) {
+    const seedStart = companionsMigrationSQL.indexOf('INSERT OR IGNORE INTO companions');
+    const schemaSQL = seedStart < 0 ? companionsMigrationSQL : companionsMigrationSQL.slice(0, seedStart);
     try {
-      db.exec(companionsMigrationSQL);
+      db.exec(schemaSQL);
     } catch (err: unknown) {
       const msg = errMessage(err);
       if (!msg.includes('duplicate column') && !msg.includes('already exists')) {
         console.warn('Migration warning (014):', msg);
       }
       // Heal partial application: each ALTER is its own try/catch so a duplicate
-      // on one doesn't block the others or the seed below.
+      // on one doesn't block the other.
       try { db.exec('ALTER TABLE threads ADD COLUMN default_companion_id TEXT'); } catch { /* duplicate column — fine */ }
       try { db.exec('ALTER TABLE messages ADD COLUMN companion_id TEXT'); } catch { /* duplicate column — fine */ }
-      // Seed is INSERT OR IGNORE (idempotent); re-run so a mid-file throw on the
-      // first boot still lands the roster rows.
-      try {
-        db.exec(
-          "INSERT OR IGNORE INTO companions (id, display_name, avatar, brain, model, sort_order, created_at) VALUES " +
-          "('companion-a', 'Companion A', '/api/files/d03d4e7c-6c4c-4ae1-8134-848c8507939e', 'companion-a-b', NULL, 0, datetime('now')), " +
-          "('companion-b', 'Companion B', '/api/files/a7421965-61e9-4f53-8ce0-0d2cf47a7d17', 'companion-a-b', NULL, 1, datetime('now')), " +
-          "('companion-c',  'Companion C',  NULL, 'companion-c', NULL, 2, datetime('now'));"
-        );
-      } catch { /* best effort — table may not exist on a first-run failure */ }
     }
+    if (seedStart >= 0) db.exec(companionsMigrationSQL.slice(seedStart));
   }
 
   // Rooms seed + roster backfill (Arc C rooms, Slice 2 — data only, still no
@@ -206,8 +194,9 @@ export function initDb(dbPath: string): Database.Database {
         const exists = db.prepare('SELECT 1 FROM threads WHERE id = ?').get(rid);
         if (exists) {
           const seatHome = db.prepare('INSERT OR IGNORE INTO thread_companions (thread_id, companion_id) VALUES (?, ?)');
-          seatHome.run(rid, 'companion-a');
-          seatHome.run(rid, 'companion-b');
+          for (const id of ['companion-a', 'companion-b']) {
+            if (db.prepare('SELECT 1 FROM companions WHERE id = ?').get(id)) seatHome.run(rid, id);
+          }
         }
       }
     } catch (err: unknown) {

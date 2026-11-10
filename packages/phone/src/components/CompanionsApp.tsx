@@ -57,6 +57,24 @@ export function CompanionsApp({
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
 
+  const colorDrafts = useRef<Record<string, string>>({});
+  const updateQueues = useRef<Record<string, Promise<void>>>({});
+
+  function stageColor(id: string, color: string) {
+    colorDrafts.current[id] = color;
+    setCompanions(prev => prev.map(c => c.id === id ? { ...c, color } : c));
+  }
+
+  async function closeColorPicker(id: string) {
+    const color = colorDrafts.current[id];
+    if (color !== undefined) {
+      if (!await updateCompanion(id, { color })) return;
+      if (colorDrafts.current[id] !== color) return;
+      delete colorDrafts.current[id];
+    }
+    setShowColorPicker(null);
+  }
+
   // Image cropping state
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [cropTargetId, setCropTargetId] = useState<string | null>(null);
@@ -137,10 +155,14 @@ export function CompanionsApp({
   }
 
   async function updateCompanion(id: string, updates: Partial<Companion>) {
+    const previous = updateQueues.current[id] ?? Promise.resolve();
+    let release!: () => void;
+    updateQueues.current[id] = new Promise<void>(resolve => { release = resolve; });
+    await previous;
     setSaving(id);
     setError(null);
     try {
-      const res = await apiFetch(`/api/companions/${id}`, {
+      const res = await apiFetch(`/api/companions/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -160,11 +182,14 @@ export function CompanionsApp({
       if ('emoji' in updates || 'avatar_url' in updates) await loadProfiles();
       const raw = data && typeof data === 'object' ? data.companion : null;
       const saved = raw ? normalizeCompanionRow(raw as Record<string, unknown>) : null;
-      setCompanions(prev => prev.map(c => (c.id === id ? (saved ? { ...c, ...saved } : { ...c, ...updates }) : c)));
+      setCompanions(prev => prev.map(c => (c.id === id ? (saved ? { ...c, ...saved, ...(colorDrafts.current[id] !== undefined ? { color: colorDrafts.current[id] } : {}) } : { ...c, ...updates }) : c)));
       onCompanionsChange?.();
+      return true;
     } catch (err) {
       setError(`Failed to save: ${err instanceof Error ? err.message : 'unknown'}`);
+      return false;
     } finally {
+      release();
       setSaving(null);
     }
   }
@@ -220,13 +245,13 @@ export function CompanionsApp({
     }
   }
 
-  async function deleteCompanion(slug: string) {
-    if (!confirm(`Delete ${slug}? This cannot be undone.`)) return;
-    setSaving(slug);
+  async function deleteCompanion(id: string) {
+    if (!confirm(`Delete ${id}? This cannot be undone.`)) return;
+    setSaving(id);
     try {
-      const res = await apiFetch(`/api/companions/${slug}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/companions/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
-      setCompanions(prev => prev.filter(c => c.slug !== slug));
+      setCompanions(prev => prev.filter(c => c.id !== id));
       onCompanionsChange?.();
     } catch (err) {
       setError(`Delete failed: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -453,19 +478,19 @@ export function CompanionsApp({
                       <div className="relative">
                         <label className={cn('text-[10px] uppercase tracking-wider', colors.textMuted)}>Color</label>
                         <button
-                          onClick={() => setShowColorPicker(showColorPicker === c.id ? null : c.id)}
+                          onClick={() => showColorPicker === c.id ? void closeColorPicker(c.id) : setShowColorPicker(c.id)}
                           className="w-full mt-1 h-12 rounded-lg border border-white/20"
                           style={{ backgroundColor: c.color || '#6366f1' }}
                         />
                         {showColorPicker === c.id && (
-                          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowColorPicker(null)}>
+                          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => void closeColorPicker(c.id)}>
                             <div className={cn('p-4 rounded-2xl', colors.panelBg)} onClick={e => e.stopPropagation()}>
                               <HexColorPicker
                                 color={c.color || '#6366f1'}
-                                onChange={(color) => updateCompanion(c.id, { color })}
+                                onChange={(color) => stageColor(c.id, color)}
                               />
                               <button
-                                onClick={() => setShowColorPicker(null)}
+                                onClick={() => void closeColorPicker(c.id)}
                                 className="w-full mt-3 py-2 rounded-lg text-sm font-medium text-white"
                                 style={{ backgroundColor: c.color || '#6366f1' }}
                               >
@@ -518,14 +543,16 @@ export function CompanionsApp({
                       />
                     </div>
 
-                    <div className="flex justify-end pt-2">
-                      <button
-                        onClick={() => deleteCompanion(c.slug)}
-                        className="flex items-center gap-1 text-xs hover:opacity-80" style={{ color: colors.accent }}
-                      >
-                        <Trash2 size={14} /> Delete
-                      </button>
-                    </div>
+                    {c.id !== 'companion-a' && c.id !== 'companion-b' && (
+                      <div className="flex justify-end pt-2">
+                        <button
+                          onClick={() => deleteCompanion(c.id)}
+                          className="flex items-center gap-1 text-xs hover:opacity-80" style={{ color: colors.accent }}
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

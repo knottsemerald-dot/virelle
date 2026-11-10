@@ -8,16 +8,12 @@
 -- `companions` table + a `thread_companions` join (SQLite-friendly, FK-checked)
 -- and maps NESTstack's per-message `author` onto `messages.companion_id`.
 -- Identity-quarantined: no NESTstack companion names or room ids survive here —
--- byte-light seeds its own residents (companion-a, companion-b) + third node (companion-c).
+-- byte-light seeds its own residents (companion-a, companion-b).
 --
 -- Companion id convention: the *individual* slugs already used across byte-light
 -- for identity — 'companion-a', 'companion-b' (see migrations/013_memory.sql scope column,
--- routes/profiles-routes.ts PROFILE_KEYS) and 'companion-c' (see
--- migrations/007_starred_messages.sql actor list). The two residents are two
--- picker entries that SHARE one brain: their `brain` value is 'companion-a-b',
--- which is the exact runtime/tier id keyed in companion_settings
--- (migrations/011_seed_companion_defaults.sql). The third node has his own brain
--- ('companion-c'). `model` stays NULL until the dispatch slice (Slice 4) consumes it.
+-- routes/profiles-routes.ts PROFILE_KEYS). The two residents share the brain
+-- 'companion-a-b', the runtime/tier id keyed in companion_settings.
 --
 -- Avatar values start empty. `avatar` mirrors the profiles store's `image`
 -- field format: an /api/files/<id> path or NULL when no photo is set.
@@ -64,11 +60,7 @@ ALTER TABLE threads ADD COLUMN default_companion_id TEXT;
 -- rewrite) even though `messages` is byte-light's largest table.
 ALTER TABLE messages ADD COLUMN companion_id TEXT;
 
--- Seed the roster registry. Two residents (two picker entries, one shared brain
--- 'companion-a-b') + the third node (his own brain 'companion-c'). Avatars copied from
--- empty public defaults. INSERT OR IGNORE keeps this idempotent across the
--- runner's every-boot re-exec.
+-- Idempotently seed the core resident pair on every startup.
 INSERT OR IGNORE INTO companions (id, display_name, avatar, brain, model, sort_order, created_at) VALUES
   ('companion-a', 'Companion A', NULL, 'companion-a-b', NULL, 0, datetime('now')),
-  ('companion-b', 'Companion B', NULL, 'companion-a-b', NULL, 1, datetime('now')),
-  ('companion-c',  'Companion C',  NULL,                                              'companion-c',        NULL, 2, datetime('now'));
+  ('companion-b', 'Companion B', NULL, 'companion-a-b', NULL, 1, datetime('now'));

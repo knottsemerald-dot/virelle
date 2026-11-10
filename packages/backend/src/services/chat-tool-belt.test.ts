@@ -33,7 +33,7 @@ const BELT_NAMES = [
   'send_voice_note', 'generate_image', 'search_messages', 'search_web',
   'core_memory_view', 'core_memory_append', 'core_memory_replace', 'core_memory_rethink',
   'library_status', 'library_read', 'library_highlights', 'library_note',
-  'set_intention', 'cancel_intention', 'set_status',
+  'set_intention', 'cancel_intention', 'set_status', 'delegate_code',
   'battleship_fire',
 ];
 
@@ -169,6 +169,14 @@ describe('executor error envelope', () => {
     assert.ok(res);
     assert.equal(res!.ok, false);
     assert.match(res!.result, /voice_unavailable: no key/);
+  });
+});
+
+describe('delegate_code (bounded Codex specialist)', () => {
+  it('fails closed when no task is supplied', async () => {
+    const res = await executeBeltTool('delegate_code', {});
+    assert.equal(res?.ok, false);
+    assert.match(res?.result ?? '', /task is required/);
   });
 });
 

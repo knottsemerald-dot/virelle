@@ -48,6 +48,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { getBytelightConfig } from '../config.js';
 import { getSecret } from './secrets.js';
 import { errMessage } from '../util/errors.js';
+import { delegateCodeTask } from './code-delegation.js';
 import type { TurnAudience } from './turn-audience.js';
 
 // ─── Turn-scoped context ─────────────────────────────────────────────
@@ -801,6 +802,30 @@ export const CHAT_TOOL_BELT: BeltTool[] = [
         return { ok: false, result: JSON.stringify({ ok: false, error: errMessage(e) }) };
       }
     },
+  },
+
+
+  // 15. delegate_code → bounded Codex specialist in a separate dev clone
+  {
+    schema: {
+      name: 'delegate_code',
+      description:
+        'Hand a clear software task to Codex while you remain the conversational companion. Use inspect mode freely for read-only code investigation. Use edit mode only when the owner clearly asks to implement, fix, or change code. Codex works in a separate development clone, never production; it cannot commit, push, merge, or deploy. Afterward, explain the report and diff and ask for approval before deployment.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: 'A self-contained coding or code-investigation task, including desired behavior and relevant context.' },
+          mode: { type: 'string', enum: ['inspect', 'edit'], description: 'inspect reads only; edit may change the development workspace. Defaults to edit.' },
+          continue_existing: { type: 'boolean', description: 'True only when the owner asks to revise the currently pending Codex branch. False starts a fresh task and refuses if unreviewed changes exist.' },
+        },
+        required: ['task'],
+      },
+    },
+    handler: async (args) => delegateCodeTask({
+      task: typeof args.task === 'string' ? args.task : '',
+      mode: args.mode === 'inspect' ? 'inspect' : 'edit',
+      continue_existing: args.continue_existing === true,
+    }),
   },
 
   // ── Games and places ────────────────────────────────────────────────

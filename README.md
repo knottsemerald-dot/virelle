@@ -173,6 +173,7 @@ Memory is the difference between a companion and a very polite stranger. bytelig
 - **Chat** — real-time streaming with interleaved tool visualization, thinking blocks, reactions, reply-to, file sharing, canvas editor (markdown/code/HTML), keyword + semantic search, mobile PWA.
 - **X-Ray panel** — the files that traditionally require terminal edits, in the browser: identity (`CLAUDE.md`) with full-text editing, native memory, wake prompts, live context stack. No YAML required.
 - **Runtimes & models** — every lane in one dropdown: Claude SDK, the Codex warm daemon (ChatGPT OAuth, full tool belt bridged over MCP), and BYOK provider lanes via the encrypted secrets store. Separate model choices for chat vs. autonomous wakes. Proactive limit warnings watch every usage meter.
+- **Gemini → Codex delegation (Virelle)** — an OpenRouter companion can call a bounded `delegate_code` tool for read-only investigation or branch-scoped edits in a separate development clone, then return to the same conversation. See `docs/CODE-DELEGATION.md`.
 - **Command Center** (`/cc`) — a built-in life-management system the companion can drive: planner, calendar, care tracker, cycle tracker, pet care, lists, finances, stats — 12 MCP tools.
 - **Wakes** — six default slots plus custom schedules, timers, one-shot impulses, recurring watchers, and a failsafe silence ladder. Optional `program.md` as an active quest board for autonomous work.
 - **Theming** — light/dark, accent palettes + custom hex, background shades, bubble colors, typography — all persisted without touching config.

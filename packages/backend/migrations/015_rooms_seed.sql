@@ -5,7 +5,7 @@
 -- fixed rooms or deployment-specific UUIDs.
 
 INSERT OR IGNORE INTO thread_companions (thread_id, companion_id)
-  SELECT id, 'companion-a' FROM threads;
+  SELECT id, 'companion-a' FROM threads WHERE EXISTS (SELECT 1 FROM companions WHERE id = 'companion-a');
 
 INSERT OR IGNORE INTO thread_companions (thread_id, companion_id)
-  SELECT id, 'companion-b' FROM threads;
+  SELECT id, 'companion-b' FROM threads WHERE EXISTS (SELECT 1 FROM companions WHERE id = 'companion-b');

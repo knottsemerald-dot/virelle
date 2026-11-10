@@ -27,6 +27,8 @@ import { getThread } from '../services/db.js';
 import { getOwnerSlug, ownerDisplayName } from '../services/db/owner-name.js';
 import {
   listCompanions,
+  deleteCompanion,
+  ProtectedCompanionError,
   getThreadRoster,
   setThreadRoster,
   allCompanionsExist,
@@ -75,6 +77,7 @@ export function createRoomsRoutes(): Router {
       // The phone's card calls his photo avatar_url; the registry column is
       // avatar. Take either name.
       if ('avatar_url' in body && !('avatar' in body)) body.avatar = body.avatar_url;
+      if ('accent_color' in body && !('color' in body)) body.color = body.accent_color;
       const updates: CompanionCardUpdate = {};
       for (const [key, max] of Object.entries(CARD_FIELDS) as Array<[keyof CompanionCardUpdate, number]>) {
         if (!(key in body)) continue;
@@ -116,6 +119,23 @@ export function createRoomsRoutes(): Router {
     } catch (err) {
       console.error('Failed to update companion card:', err);
       res.status(500).json({ error: 'Failed to update companion card' });
+    }
+  });
+
+  router.delete('/companions/:id', (req, res) => {
+    try {
+      if (!deleteCompanion(req.params.id)) {
+        res.status(404).json({ error: 'Companion not found' });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      if (err instanceof ProtectedCompanionError) {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      console.error('Failed to delete companion:', err);
+      res.status(500).json({ error: 'Failed to delete companion' });
     }
   });
 

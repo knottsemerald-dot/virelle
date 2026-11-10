@@ -116,3 +116,21 @@ export function updateCompanionCard(id: string, updates: CompanionCardUpdate): C
     .prepare('SELECT id, display_name, avatar, brain, model, sort_order, created_at, bio, status, phone, emoji, color FROM companions WHERE id = ?')
     .get(id) as Companion | undefined) ?? null;
 }
+
+export class ProtectedCompanionError extends Error {
+  constructor() {
+    super('Core residents companion-a (Zaden) and companion-b (Kevin) cannot be deleted');
+  }
+}
+
+/** Remove a registry card and live roster/default references; retain message history. */
+export function deleteCompanion(id: string): boolean {
+  if (id === 'companion-a' || id === 'companion-b') throw new ProtectedCompanionError();
+  const db = getDb();
+  return db.transaction(() => {
+    if (!db.prepare('SELECT 1 FROM companions WHERE id = ?').get(id)) return false;
+    db.prepare('DELETE FROM thread_companions WHERE companion_id = ?').run(id);
+    db.prepare('UPDATE threads SET default_companion_id = NULL WHERE default_companion_id = ?').run(id);
+    return db.prepare('DELETE FROM companions WHERE id = ?').run(id).changes > 0;
+  })();
+}

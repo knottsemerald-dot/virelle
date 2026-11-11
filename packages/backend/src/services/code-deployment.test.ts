@@ -143,6 +143,8 @@ test('isolated promotion and coherent rollback at copy/restart/health boundaries
       assert.equal(existsSync(join(prod, 'new.ts')), ['none', 'transient-health', 'root-runtime', 'rollback-stop'].includes(failure));
       for (const path of artifacts) assert.equal(readFileSync(join(prod, path, 'artifact'), 'utf8'), ['none', 'transient-health', 'root-runtime', 'rollback-stop'].includes(failure) ? 'new-build' : 'old-build');
       assert.equal(existsSync(join(state, 'deploy.lock')), failure.startsWith('rollback-'));
+      assert.equal(existsSync(join(root, 'stage', key)), failure.startsWith('rollback-'));
+      assert.equal(existsSync(join(state, `${key}.artifacts`)), failure.startsWith('rollback-'));
       assert.equal(readFileSync(join(prod, 'fixture.sqlite'), 'utf8'), ['none', 'transient-health', 'root-runtime', 'rollback-stop', 'rollback-database'].includes(failure) ? 'database-after' : 'database-before');
       if (failure === 'transient-health') assert.equal(commands.filter(c => c.file === '/usr/bin/pm2' && c.args[0] === 'jlist').length, 8);
       if (failure === 'none') assert.equal(commands.filter(c => c.file === '/usr/bin/pm2' && c.args[0] === 'jlist').length, 6);

@@ -319,6 +319,10 @@ export async function runDeployment(key: string, io: DeploymentBoundary = bounda
   } finally {
     result.next = result.status === 'deployed' ? 'Deployment complete; no commit or push performed.' : 'Review persisted diagnostics before any further deployment.';
     atomic(join(dir, `${key}.json`), result);
-    if (result.status !== 'recovery_required') rmSync(join(dir, 'deploy.lock'), { force: true });
+    if (result.status !== 'recovery_required') {
+      rmSync(stage, { recursive: true, force: true });
+      rmSync(join(dir, `${key}.artifacts`), { recursive: true, force: true });
+      rmSync(join(dir, 'deploy.lock'), { force: true });
+    }
   }
 }

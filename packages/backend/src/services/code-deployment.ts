@@ -243,6 +243,13 @@ export async function runDeployment(key: string, io: DeploymentBoundary = bounda
     const tar = join(stage, '.bl-source.tar'), patch = join(stage, '.bl-source.patch');
     writeFileSync(tar, archive, { mode: 0o644, flag: 'wx' });
     writeFileSync(patch, snap.patch, { mode: 0o644, flag: 'wx' });
+    // Upstream intentionally ignores package-lock.json. Pending manifest/lockfile edits
+    // are forbidden, so reuse production's root-owned lock for a deterministic npm ci.
+    const productionLock = join(cfg.prod, 'package-lock.json');
+    trustedDirectory(dirname(productionLock));
+    const lockStat = lstatSync(productionLock);
+    if (!lockStat.isFile() || lockStat.uid !== 0 || (lockStat.mode & 0o022) || lockStat.nlink !== 1) throw new Error('Trusted production package lock required');
+    writeFileSync(join(stage, 'package-lock.json'), readFileSync(productionLock), { mode: 0o644, flag: 'wx' });
     const home = join(stage, '.build-home'); mkdirSync(home);
     (io.chown || chownSync)(home, cfg.builder.uid, cfg.builder.gid);
     (io.chown || chownSync)(stage, cfg.builder.uid, cfg.builder.gid);

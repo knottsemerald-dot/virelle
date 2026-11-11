@@ -93,6 +93,7 @@ test('isolated promotion and coherent rollback at copy/restart/health boundaries
       writeFileSync(join(dev, 'source.ts'), 'after'); writeFileSync(join(dev, 'new.ts'), 'new');
 
       writeFileSync(join(prod, 'source.ts'), 'before'); writeFileSync(join(prod, 'fixture.sqlite'), 'database-before');
+      writeFileSync(join(prod, 'package-lock.json'), '{\"lockfileVersion\":3}');
       for (const path of artifacts) { mkdirSync(join(prod, path), { recursive: true }); writeFileSync(join(prod, path, 'artifact'), 'old-build'); }
       mkdirSync(join(prod, 'packages/backend/dist/services'));
       for (const name of ['code-deployment.js', 'code-deployment-worker.js', 'code-patch.js']) writeFileSync(join(prod, 'packages/backend/dist/services', name), 'trusted-coordinator');

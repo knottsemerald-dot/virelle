@@ -33,7 +33,7 @@ const BELT_NAMES = [
   'send_voice_note', 'generate_image', 'search_messages', 'search_web',
   'core_memory_view', 'core_memory_append', 'core_memory_replace', 'core_memory_rethink',
   'library_status', 'library_read', 'library_highlights', 'library_note',
-  'set_intention', 'cancel_intention', 'set_status', 'delegate_code',
+  'set_intention', 'cancel_intention', 'set_status', 'delegate_code', 'deploy_code', 'deploy_code_status',
   'battleship_fire',
 ];
 
@@ -177,6 +177,41 @@ describe('delegate_code (bounded Codex specialist)', () => {
     const res = await executeBeltTool('delegate_code', {});
     assert.equal(res?.ok, false);
     assert.match(res?.result ?? '', /task is required/);
+  });
+});
+
+describe('guarded deployment belt', () => {
+  it('requires exact deploy schema fields and exposes read-only status', () => {
+    const deploy = getBeltToolSchemas().find(s => s.name === 'deploy_code')!;
+    const status = getBeltToolSchemas().find(s => s.name === 'deploy_code_status')!;
+    assert.deepEqual(deploy.input_schema.required, ['branch', 'diff_sha256', 'confirmation']);
+    assert.deepEqual(status.input_schema.required, ['branch', 'diff_sha256']);
+  });
+  it('keeps approval isolated between concurrent turns and clears it after the turn', async () => {
+    const args = { branch: '../invalid', diff_sha256: 'a'.repeat(64), confirmation: 'DEPLOY', ownerMessageText: 'deploy', isAutonomous: false };
+    await Promise.all([
+      runWithBeltContext({ ownerMessageText: 'deploy', isAutonomous: false }, async () => {
+        await new Promise(r => setTimeout(r, 10));
+        assert.match((await executeBeltTool('deploy_code', args))!.result, /Invalid codex branch/);
+      }),
+      runWithBeltContext({ ownerMessageText: 'not yet', isAutonomous: false }, async () => {
+        assert.match((await executeBeltTool('deploy_code', args))!.result, /Live owner/);
+      }),
+    ]);
+    assert.match((await executeBeltTool('deploy_code', args))!.result, /Live owner/);
+  });
+  it('binds approval to live context and globally refuses guest turns', async () => {
+    const args = { branch: '../invalid', diff_sha256: 'a'.repeat(64), confirmation: 'DEPLOY' };
+    assert.match((await executeBeltTool('deploy_code', args))!.result, /Live owner/);
+    for (const ctx of [
+      { ownerMessageText: 'deploy', isAutonomous: true },
+      { ownerMessageText: 'do not deploy', isAutonomous: false },
+    ]) await runWithBeltContext(ctx, async () => assert.match((await executeBeltTool('deploy_code', args))!.result, /Live owner/));
+    await runWithBeltContext({ ownerMessageText: 'deploy', isAutonomous: false }, async () => assert.match((await executeBeltTool('deploy_code', args))!.result, /Invalid codex branch/));
+    await runWithBeltContext({ ownerMessageText: 'deploy', isAutonomous: false, audience: { kind: 'guest', trust: 'full' } }, async () => {
+      assert.match((await executeRouterTool('deploy_code', args)).result, /guest turn/);
+      assert.match((await executeRouterTool('deploy_code_status', args)).result, /guest turn/);
+    });
   });
 });
 

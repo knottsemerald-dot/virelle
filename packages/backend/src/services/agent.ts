@@ -973,7 +973,7 @@ export class AgentService {
   ): Promise<string> {
     const voices = opts?.roomVoices ?? [];
     const withVoices = voices.length ? content + priorVoicesBlock([...voices], roomUserName()) : content;
-    const reply = await this._processQuery(threadId, withVoices, false, threadMeta, opts);
+    const reply = await this._processQuery(threadId, withVoices, false, threadMeta, { ...opts, ownerMessageText: content });
     if (reply && reply.trim()) {
       opts?.onRoomVoice?.({ name: roomHouseName(), text: reply });
     }
@@ -1038,7 +1038,7 @@ export class AgentService {
       }
       const laneContent = spoken.length === 0 ? content : content + priorVoicesBlock(spoken, roomUserName());
       try {
-        const reply = await this._processQuery(threadId, laneContent, false, threadMeta, { ...opts, lane: { companionId: seat.id, historyBefore } });
+        const reply = await this._processQuery(threadId, laneContent, false, threadMeta, { ...opts, ownerMessageText: content, lane: { companionId: seat.id, historyBefore } });
         if (reply && reply.trim()) {
           spoken.push({ name: seat.name, text: reply });
           replies.push(reply);
@@ -1091,6 +1091,7 @@ export class AgentService {
   }
 
   private async _processQuery(threadId: string, content: string, isAutonomous = false, threadMeta?: { name: string; type: 'daily' | 'named' | 'treehouse' }, platformOpts?: {
+    ownerMessageText?: string;
     platform?: 'web' | 'discord' | 'telegram' | 'api';
     platformContext?: string;
     withdrawn?: string;
@@ -1687,6 +1688,8 @@ export class AgentService {
         await runWithBeltContext({
           threadId,
           ...(turnAudience ? { audience: turnAudience } : {}),
+          ownerMessageText: platformOpts?.ownerMessageText,
+          isAutonomous,
           discordChannelId: platformOpts?.discordChannelId,
           discordGuildId: platformOpts?.discordGuildId,
           discordMessageId: platformOpts?.discordMessageId,

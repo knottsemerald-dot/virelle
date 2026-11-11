@@ -9,12 +9,14 @@
  */
 
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, realpath, chown } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
+
+import { identity, safeEnv, pendingPatch, execution } from './code-patch.js';
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_WORKSPACE = '/root/virelle-workspace';
+const DEFAULT_WORKSPACE = '/srv/virelle-dev';
 const MAX_TASK_CHARS = 8_000;
 const MAX_OUTPUT_CHARS = 24_000;
 const CODEX_TIMEOUT_MS = 20 * 60 * 1_000;
@@ -32,11 +34,12 @@ interface CommandResult {
 }
 
 async function command(file: string, args: string[], cwd: string, timeout = 30_000): Promise<CommandResult> {
-  const { stdout = '', stderr = '' } = await execFileAsync(file, args, {
+  const cmd = execution(file, args, identity('BYTELIGHT_CODEX'));
+  const { stdout = '', stderr = '' } = await execFileAsync(cmd.file, cmd.args, {
     cwd,
     timeout,
     maxBuffer: 2 * 1024 * 1024,
-    env: process.env,
+    env: safeEnv(process.env.BYTELIGHT_CODEX_HOME),
   });
   return { stdout: String(stdout), stderr: String(stderr) };
 }
@@ -45,7 +48,11 @@ async function command(file: string, args: string[], cwd: string, timeout = 30_0
  * it receives EOF immediately; execFile's default open pipe can hang forever. */
 async function codexCommand(args: string[], cwd: string, timeout = CODEX_TIMEOUT_MS): Promise<CommandResult> {
   return await new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn('codex', args, { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const id = identity('BYTELIGHT_CODEX');
+    const home = process.env.BYTELIGHT_CODEX_HOME;
+    if (!home || !home.startsWith('/')) throw new Error('Absolute BYTELIGHT_CODEX_HOME required');
+    const cmd = execution('codex', args, id);
+    const child = spawn(cmd.file, cmd.args, { cwd, env: safeEnv(home), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -96,27 +103,25 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return (await command('git', args, cwd)).stdout.trim();
 }
 
-async function prepareEditBranch(cwd: string, task: string, continueExisting: boolean): Promise<string> {
-  const status = await git(cwd, ['status', '--porcelain']);
-  const current = await git(cwd, ['branch', '--show-current']);
+export async function prepareEditBranch(cwd: string, task: string, continueExisting: boolean, runGit = git): Promise<string> {
+  const status = await runGit(cwd, ['status', '--porcelain']);
+  const current = await runGit(cwd, ['branch', '--show-current']);
 
+  if (continueExisting && current.startsWith('codex/')) return current;
   if (status) {
-    if (continueExisting && current.startsWith('codex/')) return current;
     throw new Error(
       `The coding workspace already has unreviewed changes on ${current || 'a detached branch'}. ` +
       'Ask to continue that change with continue_existing:true, or review/deploy/reset it first.',
     );
   }
 
-  // Start every new edit from the local main branch. Updating from GitHub is
-  // deliberately outside Codex's hands and fails closed if main diverged.
-  if (current !== 'main') await git(cwd, ['switch', 'main']);
-  await git(cwd, ['fetch', 'origin', 'main']);
-  await git(cwd, ['merge', '--ff-only', 'origin/main']);
+  // Start every new edit from local main; baseline maintenance stays outside this tool.
+  if (current !== 'main') await runGit(cwd, ['switch', 'main']);
+  // Local-only: synchronization is an owner maintenance action.
 
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
   const branch = `codex/${stamp}-${taskSlug(task)}`;
-  await git(cwd, ['switch', '-c', branch]);
+  await runGit(cwd, ['switch', '-c', branch]);
   return branch;
 }
 
@@ -140,7 +145,22 @@ export async function delegateCodeTask(raw: CodeDelegationRequest): Promise<{ ok
   const workspace = resolve(process.env.BYTELIGHT_CODE_WORKSPACE || DEFAULT_WORKSPACE);
   codingTurnActive = true;
   let outputFile = '';
+  let outputDir = '';
   try {
+    const id = identity('BYTELIGHT_CODEX');
+    const configuredHome = process.env.BYTELIGHT_CODEX_HOME;
+    if (!configuredHome?.startsWith('/') || resolve(configuredHome) !== configuredHome) throw new Error('Absolute canonical BYTELIGHT_CODEX_HOME required');
+    const codexHome = await realpath(configuredHome);
+    const homeStat = await stat(codexHome);
+    if (codexHome !== configuredHome || homeStat.uid !== id.uid || homeStat.gid !== id.gid || (homeStat.mode & 0o077) !== 0) throw new Error('Codex HOME must be canonical, owned by Codex identity, and mode 0700');
+    for (const candidate of ['BYTELIGHT_CODE_PRODUCTION', 'BYTELIGHT_CODE_STATE_DIR', 'BYTELIGHT_CODE_STAGING_DIR', 'BYTELIGHT_CODE_BACKUP_DIR'].map(k => process.env[k]).filter((v): v is string => Boolean(v))) {
+      const root = resolve(candidate);
+      if (codexHome === root || codexHome.startsWith(root + sep) || root.startsWith(codexHome + sep)) throw new Error('Codex HOME must be disjoint from privileged deployment paths');
+    }
+    const physical = await realpath(workspace);
+    if (physical !== workspace) throw new Error('Workspace must be a canonical physical path');
+    if (physical === '/root/production' || physical.startsWith('/root/production/')) throw new Error('Production workspace forbidden');
+    if ((await stat(physical)).uid !== id.uid) throw new Error('Workspace must be owned by Codex identity');
     const inside = await git(workspace, ['rev-parse', '--show-toplevel']);
     if (resolve(inside) !== workspace) throw new Error(`Coding workspace mismatch: expected ${workspace}, got ${inside}`);
 
@@ -148,8 +168,9 @@ export async function delegateCodeTask(raw: CodeDelegationRequest): Promise<{ ok
       ? await prepareEditBranch(workspace, task, continueExisting)
       : await git(workspace, ['branch', '--show-current']);
 
-    const tmpDir = '/tmp/bytelight-code-delegation';
-    await mkdir(tmpDir, { recursive: true });
+    const tmpDir = await mkdtemp('/tmp/bytelight-code-');
+    outputDir = tmpDir;
+    await chown(tmpDir, id.uid, id.gid);
     outputFile = `${tmpDir}/last-${process.pid}-${Date.now()}.md`;
 
     const policy = mode === 'inspect'
@@ -183,7 +204,8 @@ export async function delegateCodeTask(raw: CodeDelegationRequest): Promise<{ ok
 
     const status = await git(workspace, ['status', '--short']);
     const diffStat = mode === 'edit' ? await git(workspace, ['diff', '--stat']) : '';
-    const diff = mode === 'edit' ? await git(workspace, ['diff', '--', ':!package-lock.json']) : '';
+    const snapshot = mode === 'edit' ? pendingPatch(workspace) : undefined;
+    const diff = snapshot?.patch.toString('utf8') || '';
 
     return {
       ok: true,
@@ -194,7 +216,8 @@ export async function delegateCodeTask(raw: CodeDelegationRequest): Promise<{ ok
         report: short(report, 12_000),
         status: short(status, 4_000),
         diffStat: short(diffStat, 4_000),
-        diff: short(diff, 20_000),
+        diff: short(diff.replace(/GIT binary patch[\s\S]*?(?=diff --git|$)/g, '[binary patch omitted]\n'), 20_000),
+        diff_sha256: snapshot?.diff_sha256,
         next: mode === 'edit'
           ? 'Explain the result to the owner. Do not claim it is deployed. The owner must approve review/deployment.'
           : 'Explain the findings; no files were changed.',
@@ -205,6 +228,6 @@ export async function delegateCodeTask(raw: CodeDelegationRequest): Promise<{ ok
     return { ok: false, result: JSON.stringify({ ok: false, error: message }) };
   } finally {
     codingTurnActive = false;
-    if (outputFile) await rm(outputFile, { force: true }).catch(() => undefined);
+    if (outputDir) await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

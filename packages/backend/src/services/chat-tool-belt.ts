@@ -48,12 +48,15 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { getBytelightConfig } from '../config.js';
 import { getSecret } from './secrets.js';
 import { errMessage } from '../util/errors.js';
+import { deployCode, deployCodeStatus } from './code-deployment.js';
 import { delegateCodeTask } from './code-delegation.js';
 import type { TurnAudience } from './turn-audience.js';
 
 // ─── Turn-scoped context ─────────────────────────────────────────────
 
 export interface BeltContext {
+  ownerMessageText?: string;
+  isAutonomous?: boolean;
   /** Thread the current foreign turn belongs to. Injected into the
    *  thread-bound endpoints (tts / image) so their output lands in the
    *  right chat even under concurrent turns. */
@@ -827,6 +830,18 @@ export const CHAT_TOOL_BELT: BeltTool[] = [
       continue_existing: args.continue_existing === true,
     }),
   },
+
+  ...(['deploy_code', 'deploy_code_status'] as const).map(name => ({
+    schema: {
+      name,
+      description: name === 'deploy_code' ? 'Deploy the exact pending diff only after explicit live owner approval. Returns pending; use deploy_code_status after restart. Never commits or pushes.' : 'Read deployment status only; never starts work.',
+      input_schema: { type: 'object' as const, additionalProperties: false, properties: {
+        branch: { type: 'string' }, diff_sha256: { type: 'string' },
+        ...(name === 'deploy_code' ? { confirmation: { type: 'string', enum: ['DEPLOY'] } } : {}),
+      }, required: name === 'deploy_code' ? ['branch', 'diff_sha256', 'confirmation'] : ['branch', 'diff_sha256'] },
+    },
+    handler: async (args: Record<string, unknown>) => name === 'deploy_code' ? deployCode(args, getBeltContext()) : deployCodeStatus(args),
+  })),
 
   // ── Games and places ────────────────────────────────────────────────
 

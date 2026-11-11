@@ -11,9 +11,9 @@ import {
 import { getBytelightConfig } from '../config.js';
 
 const COOKIE_NAME = 'bytelight_session';
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_DURATION_MS = 365 * 24 * 60 * 60 * 1000; // 365 days
 
-// Sliding renewal: an active session buys itself a fresh 7 days, so living in
+// Sliding renewal: an active session buys itself a fresh 365 days, so living in
 // the app never logs her out. Only rewritten once a day's worth of the window
 // has actually been spent — ordinary traffic costs no writes and no Set-Cookie.
 const SESSION_RENEW_AFTER_MS = 24 * 60 * 60 * 1000; // 1 day

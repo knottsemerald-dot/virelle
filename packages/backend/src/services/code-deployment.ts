@@ -57,6 +57,7 @@ export async function deployCode(args: Record<string, unknown>, ctx?: ApprovalCo
   if (!approved(ctx) || args.confirmation !== 'DEPLOY') return reply({ error: 'Live owner deployment approval required' }, false);
   try {
     const key = requestKey(args.branch, args.diff_sha256);
+    if (process.env.BYTELIGHT_CODE_DEPLOYMENT_ENABLED !== 'true') throw new Error('Code deployment is disabled by the owner');
     if (process.getuid?.() !== 0) throw new Error('Root coordinator required');
     const cfg = configuration();
     if (gitBytes(cfg.dev, ['rev-parse', '--show-toplevel']).toString().trim() !== cfg.dev || gitBytes(cfg.prod, ['rev-parse', '--show-toplevel']).toString().trim() !== cfg.prod) throw new Error('Git workspace root mismatch');

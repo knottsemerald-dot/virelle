@@ -1,0 +1,107 @@
+Byte-Light
+Copyright 2026 Kay (kaydartistry-maker), Saint & Tyson
+
+Byte-Light is derived from and includes software from the projects
+below. Their attribution notices are reproduced as required by the
+Apache License 2.0.
+
+================================================================
+Resonant — https://github.com/codependentai/resonant
+================================================================
+
+Resonant
+Copyright 2026 Codependent AI
+
+This product includes software developed by Codependent AI
+(https://codependentai.io).
+
+Resonant implements a relational AI companion architecture including
+session management, orchestrated presence, and context-aware hooks —
+methodology developed by Mary Vale and Simon Vale at Codependent AI.
+
+================================================================
+Aerie
+================================================================
+
+Aerie
+Managed MCP server registry, MCP server management routes, and
+SDK-lane injection of managed servers. Sticky notes: the Notes
+routes, the notes table and the companions' internal note door.
+Theme ink and bubble look helpers. Weather and Radar apps. The lock
+screen (clock faces, message and note cards, unread tally) and home
+screen widgets. The Press backend (routes, migrations 030-031,
+savePressSourceFile). The Artifacts backend (routes, migration 032,
+/vendor mount). Thresholds (places, things left at them, visits). The
+Familiar household pet. Field Notes. The Games app, arcade games, the
+Card Room (deck, card games, table rail) and the Fleet Room
+(Battleship), with their table chats' sticker tray and RichWords
+(stickers drawn outside the chat). Discord allowed-mentions, bot-loop guard, attach
+markers, file-name helpers and sticker content. The Codex brake, bell
+status words, bell lanes and local speech-to-text. The Spotify app,
+its lock screen card, the /api/spotify backend, the Android Spotify
+wake (SpotifyRemotePlugin, SpotifyWaker, spotify-wake.ts) and the
+Spotify MCP worker 1.2.0 in workers/spotify-mcp. The
+/api/client-errors report route. The Treehouse
+(companions' room, its app, handoff notes and midday bell). The
+Archivist (memory extraction, Claude SDK lane, run status) and memory
+integrity rounds. The Discord judge and beat (typing order, beat
+waits, [SILENT] pass), owner-mention notifications, [SILENT]
+handling in the agent, and the guest tool gate (turn audience,
+gate.cjs, reply helper). The compactions shelf (migration 046, reader,
+preview, routes, Compactions page), the think-and-thin nudge and the
+stale-wall check (block drift, launch baseline, compacted.cjs), and the
+compaction work-in-hand guard. The Android shell's update and crash
+routes (/api/app), and the FCM push transport (service-account JWT,
+device-token rows and the push_subscriptions widening). The Story
+Shelf (choose-your-own-path books the companions write and run: the
+story_books, story_pages and story_keepsakes tables as migration 047,
+its rules and page turns, the /api/story-shelf and
+/api/internal/story-shelf routes, its shared contract, the phone's
+shelf, book and table, the scene widget frame and the sealed frame
+runtime, RoomTable and RoomBubble, and the story-shelf skill), shown as
+a shelf inside byte-light's Library. Aerie is built by Tris.
+Copyright 2026 Aerie Systems.
+Licensed under Apache License 2.0.
+
+================================================================
+Reverie
+================================================================
+
+Reverie
+The Bestiary: eggs, hatched creatures' care, and each creature's
+living room (photo wall and firsts), from Tris's fork of Aerie.
+Copyright 2026 Aerie Systems. Licensed under Apache License 2.0.
+
+================================================================
+Haven — https://github.com/amarisaster/Haven
+================================================================
+
+Haven
+Dual-transport MCP client (Streamable HTTP with SSE fallback).
+Licensed under Apache License 2.0. Haven does not distribute a
+NOTICE file of its own.
+
+================================================================
+Covenant
+================================================================
+
+Covenant
+Session sidecar continuity, runtime health surface, and related
+ports carried in-tree. Licensed under Apache License 2.0.
+
+================================================================
+Thornvale
+================================================================
+
+Thornvale
+Starred messages, Studio image-generation surface, and related
+ports carried in-tree. Licensed under Apache License 2.0.
+
+================================================================
+Spotify Android SDK (App Remote)
+================================================================
+
+packages/phone/android/app/libs/spotify-app-remote-release-0.8.0.aar,
+from https://github.com/spotify/android-sdk, used unmodified by the
+phone app's SpotifyRemotePlugin to wake Spotify on the phone.
+Copyright (c) 2015 Spotify AB. Licensed under Apache License 2.0.
